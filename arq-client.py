@@ -18,19 +18,12 @@ import select
 import logging
 from collections import namedtuple
 
-sys.setrecursionlimit(1000000) # 10000 is an example, try with different values
+import traceback
+
 # Set logging
 logging.basicConfig(level=logging.DEBUG,
                     format='%(asctime)s SENDER [%(levelname)s] %(message)s',)
 log = logging.getLogger()
-
-# Definding key parameters of programm
-# it could be port, address, file, buffer_size, window_size or timeout
-parser = argparse.ArgumentParser()
-parser.add_argument("-a", "--address", type=str, help="specify the server address")
-parser.add_argument("-p", "--port", type=int, help="specify the server port")
-parser.add_argument("-f", "--file", type=str, help="specify the transieved file")
-args = parser.parse_args()
 
 class Sender(object):
     """
@@ -42,7 +35,7 @@ class Sender(object):
                  receiverIP="127.0.0.1",
                  receiverPort=8000,
                  sequenceNumberBits=2,
-                 windowSize=5,
+                 windowSize=93,
                  timeout=1,
                  maxSegmentSize=1480,
                  file_path=os.path.join(os.getcwd(), "data", "sender") + "index.html"):
@@ -95,10 +88,10 @@ class Sender(object):
         try:
             self.senderSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             self.senderSocket.bind((self.senderIP, self.senderPort))
-            self.send_packets(self.file_open())
         except Exception as e:
             log.error("Could not create UDP socket for communication with the server!")
             log.debug(e)
+            traceback.print_exc()
 
     def socket_close(self):
         """
@@ -167,13 +160,13 @@ class Sender(object):
         log.info("Generating packets")
         global packets
         packets = self.generate_packets(fd) # Global variable
+        lever = True
         if packets:
             log.info("Starting transmission of %s packets" % self.windowSize)
             for packet in packets:
                 raw_packet = self.make_pkt(packet)
                 self.senderSocket.sendto(raw_packet, self.receiverSocket)
             log.info("Stopping transmission of %s packets" % self.windowSize)
-            self.ack_timeout(fd)
         else:
             self.socket_close()
 
@@ -208,14 +201,13 @@ class Sender(object):
                 for packet in packets:
                     received_data = self.senderSocket.recv(self.maxSegmentSize)
                     ack = self.parse(received_data)
-                    log.info("Receviced acknowledgement: %s" % str(ack))
                     if packet.SequenceNumber == ack.AckNumber:
                         packets.remove(packet)
                         self.ack_timeout(fd)
             else:
                 self.resend_packets(packets, fd)
         else:
-            self.send_packets(fd)
+            log.info("Acknowledgement receviced. Sending next part of data...")
 
     def resend_packets(self, packets, fd):
         """

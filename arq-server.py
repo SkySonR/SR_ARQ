@@ -30,15 +30,13 @@ class Receiver(object):
                  receiverPort=8000,
                  senderIP="0.0.0.0",
                  senderPort=8081,
-                 sequenceNumberBits=2,
-                 windowSize=5,
-                 timeout=10,
+                 windowSize=93,
+                 timeout=1,
                  bufferSize=1500,
                  file_path=os.path.join(os.getcwd(), "data", "receiver") + "index.html"):
         self.receiverIP = receiverIP
         self.receiverPort = receiverPort
         self.receiverSocket = (self.receiverIP, self.receiverPort)
-        self.sequenceNumberBits = sequenceNumberBits
         self.windowSize = windowSize
         self.file_path = file_path
         self.senderIP = senderIP
@@ -61,6 +59,7 @@ class Receiver(object):
         except Exception as e:
             log.error("Could not create UDP socket for communication with the client!")
             log.debug(e)
+
 
     def file_open(self):
         """
