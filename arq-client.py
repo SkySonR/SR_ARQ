@@ -34,8 +34,7 @@ class Sender(object):
                  senderPort=8081,
                  receiverIP="127.0.0.1",
                  receiverPort=8000,
-                 sequenceNumberBits=2,
-                 windowSize=93,
+                 windowSize=128,
                  timeout=1,
                  maxSegmentSize=1480,
                  file_path=os.path.join(os.getcwd(), "data", "sender") + "index.html"):

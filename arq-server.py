@@ -30,7 +30,7 @@ class Receiver(object):
                  receiverPort=8000,
                  senderIP="0.0.0.0",
                  senderPort=8081,
-                 windowSize=93,
+                 windowSize=128
                  timeout=1,
                  bufferSize=1500,
                  file_path=os.path.join(os.getcwd(), "data", "receiver") + "index.html"):
