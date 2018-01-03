@@ -31,8 +31,13 @@ class Receiver(object):
                  receiverIP="127.0.0.1",
                  receiverPort=55554,
                  senderIP="0.0.0.0",
+<<<<<<< HEAD
                  senderPort=55555,
                  windowSize=5,
+=======
+                 senderPort=8081,
+                 windowSize=128
+>>>>>>> e0e8bc6e076988095c4fc158c0e0551f69c65e70
                  timeout=1,
                  bufferSize=1500,
                  file_path=os.path.join(os.getcwd(), "data", "receiver") + "index.html"):
@@ -163,8 +168,14 @@ class Receiver(object):
         """
         Compute and return a checksum of the given payload data.
         """
+<<<<<<< HEAD
         if (len(data)%2 != 0):
             data += "0"
+=======
+        if (len(data) % 2) != 0:
+            data += "0"
+
+>>>>>>> e0e8bc6e076988095c4fc158c0e0551f69c65e70
         sum = 0
         for i in range(0, len(data), 2):
             data16 = ord(data[i]) + (ord(data[i+1]) << 8)
