@@ -36,7 +36,7 @@ class Sender(object):
                  senderPort=55555,
                  receiverIP="127.0.0.1",
                  receiverPort=55554,
-                 windowSize=94,
+                 windowSize=10,
                  timeout=1,
                  maxSegmentSize=1480,
                  file_path=os.path.join(os.getcwd(), "data", "sender") + "index.html"):
@@ -242,10 +242,12 @@ def main():
     #client.send_packets(fd)
     #client.ack_timeout(fd)
     windows_num = client.windows_num()
-    for window in range(1, windows_num + 1):
-        client.send_packets(fd)
-        client.ack_timeout(fd)
-    client.socket_close()
+    client.send_packets(fd)
+    client.ack_timeout(fd)
+#    for window in range(1, windows_num + 2):
+#        client.send_packets(fd)
+#        client.ack_timeout(fd)
+#    client.socket_close()
 
 
 if __name__ == '__main__':

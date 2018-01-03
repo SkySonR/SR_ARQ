@@ -9,6 +9,8 @@ import select
 import hashlib
 import logging
 from collections import namedtuple
+from operator import attrgetter
+
 #Definding key parameters of programm
 # it could be port, file, buffer_size, window_size or timeout
 parser = argparse.ArgumentParser()
@@ -27,12 +29,13 @@ class Receiver(object):
     """
 
     def __init__(self,
-                 received_packets = [],
+                 received_packets =[],
                  receiverIP="127.0.0.1",
                  receiverPort=55554,
                  senderIP="0.0.0.0",
                  senderPort=55555,
-                 windowSize=94,
+                 windowSize=10,
+                 received_seq = [],
                  timeout=1,
                  bufferSize=1500,
                  file_path=os.path.join(os.getcwd(), "data", "receiver") + "index.html"):
@@ -46,6 +49,7 @@ class Receiver(object):
         self.senderSocket = (self.senderIP, self.senderPort)
         self.bufferSize = bufferSize
         self.received_packets = received_packets
+        self.received_seq = received_seq
 
     def socket_open(self):
         """
@@ -90,7 +94,24 @@ class Receiver(object):
             pass
 
     def file_write(self, packet):
-        fd.write(packet.Data)
+        if self.received_packets:
+            for i in self.received_packets:
+                if i.SequenceNumber not in self.received_seq:
+                    self.received_seq.append(i.SequenceNumber)
+            if packet.SequenceNumber not in self.received_seq:
+                self.received_packets.append(packet)
+                self.reveived_packets = sorted(self.received_packets, key=attrgetter('SequenceNumber'))
+            elif len(self.received_packets) == self.windowSize :#and packet.SequenceNumber not in self.received_seq:
+                for i in self.received_packets:
+                        fd.write(i.Data)
+                self.received_packets = []
+                print "CLEAN UP"
+                self.received_seq = []
+                self.received_packets.append(packet)
+        else:
+            self.received_packets.append(packet)
+            print "FIRST ELSE"
+
 
     def run(self):
         """
@@ -125,7 +146,8 @@ class Receiver(object):
                          receivedPacket.SequenceNumber)
                 self.generate_ack(receivedPacket.SequenceNumber)
                 self.file_write(receivedPacket)
-                print(self.received_packets)
+                print self.received_seq
+
 
     def parse(self, receivedPacket):
         """
