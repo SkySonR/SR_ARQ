@@ -1,6 +1,7 @@
 #! /usr/bin/env python
 import socket                   # Socket library. Wraper of C standard library
 import argparse                 # library for parsing arguments of the program
+import traceback
 import sys                      # library for interaction with OS
 import os
 import struct
@@ -26,11 +27,12 @@ class Receiver(object):
     """
 
     def __init__(self,
+                 received_packets = [],
                  receiverIP="127.0.0.1",
-                 receiverPort=8000,
+                 receiverPort=55554,
                  senderIP="0.0.0.0",
-                 senderPort=8081,
-                 windowSize=93,
+                 senderPort=55555,
+                 windowSize=5,
                  timeout=1,
                  bufferSize=1500,
                  file_path=os.path.join(os.getcwd(), "data", "receiver") + "index.html"):
@@ -43,6 +45,7 @@ class Receiver(object):
         self.senderPort = senderPort
         self.senderSocket = (self.senderIP, self.senderPort)
         self.bufferSize = bufferSize
+        self.received_packets = received_packets
 
     def socket_open(self):
         """
@@ -59,7 +62,7 @@ class Receiver(object):
         except Exception as e:
             log.error("Could not create UDP socket for communication with the client!")
             log.debug(e)
-
+            traceback.print_exc()
 
     def file_open(self):
         """
@@ -85,6 +88,15 @@ class Receiver(object):
                 self.fd.close() # try to close descriptor
         except Exception:
             pass
+
+    def file_write(self, packet):
+        if packet.SequenceNumber not in self.received_packets:
+            fd.write(packet.Data)
+            self.received_packets.append(packet.SequenceNumber)
+        elif len(self.received_packets) == self.windowSize:
+            self.received_packets = []
+            self.received_packets.append(packet.SequenceNumber)
+            fd.write(packet.Data)
 
     def run(self):
         """
@@ -118,7 +130,8 @@ class Receiver(object):
                 log.info("Transmitting an acknowledgement with ack number: %d",
                          receivedPacket.SequenceNumber)
                 self.generate_ack(receivedPacket.SequenceNumber)
-                fd.write(receivedPacket.Data)
+                self.file_write(receivedPacket)
+                print(self.received_packets)
 
     def parse(self, receivedPacket):
         """
@@ -130,12 +143,10 @@ class Receiver(object):
         sequenceNumber = struct.unpack('=I', header[0:4])[0]
         print(sequenceNumber)
         checksum = struct.unpack('=H', header[4:])[0]
-        print(checksum)
         PACKET = namedtuple("Packet", ["SequenceNumber", "Checksum", "Data"])
         packet = PACKET(SequenceNumber=sequenceNumber,
                                       Checksum=checksum,
                                       Data=data)
-        print(packet)
         return packet
 
     def udt_send(self, ack):
@@ -152,6 +163,8 @@ class Receiver(object):
         """
         Compute and return a checksum of the given payload data.
         """
+        if (len(data)%2 != 0):
+            data += "0"
         sum = 0
         for i in range(0, len(data), 2):
             data16 = ord(data[i]) + (ord(data[i+1]) << 8)
@@ -203,8 +216,6 @@ class Receiver(object):
         computedChecksum = self.checksum(receivedPacket.Data)
 
         # Compare computed checksum with the checksum of received packet
-        print(computedChecksum)
-        print(receivedPacket.Checksum)
         if computedChecksum != receivedPacket.Checksum:
             return True
         else:
@@ -224,7 +235,7 @@ class Receiver(object):
 
 def main():
     #server = Receiver(file_path='/home/renat/Labs/Python/ARQ/ARQ/data/receiver/ViewOfMagdeburg.jpg')
-    server = Receiver(file_path='/home/renat/Labs/Python/ARQ/ARQ/data/receiver/linux-4.14.zip')
+    server = Receiver(file_path='/home/max/ARQ/SR_ARQ/data/rec/1')
     try:
         server.socket_open()
     except:

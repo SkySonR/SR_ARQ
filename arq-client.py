@@ -20,6 +20,8 @@ from collections import namedtuple
 
 import traceback
 
+sys.setrecursionlimit(100000)
+
 # Set logging
 logging.basicConfig(level=logging.DEBUG,
                     format='%(asctime)s SENDER [%(levelname)s] %(message)s',)
@@ -31,11 +33,11 @@ class Sender(object):
     """
     def __init__(self,
                  senderIP="127.0.0.1",
-                 senderPort=8081,
+                 senderPort=55555,
                  receiverIP="127.0.0.1",
-                 receiverPort=8000,
+                 receiverPort=55554,
                  sequenceNumberBits=2,
-                 windowSize=93,
+                 windowSize=5,
                  timeout=1,
                  maxSegmentSize=1480,
                  file_path=os.path.join(os.getcwd(), "data", "sender") + "index.html"):
@@ -121,7 +123,7 @@ class Sender(object):
                 break
             data = fd.read(self.maxSegmentSize)
             # If not data, finish reading
-            if not data or sequenceNumber % self.windowSize == 0:
+            if not data:
                 break
             # Set sequence number for a packet to be transmitted
             sequenceNumber = i
@@ -138,6 +140,8 @@ class Sender(object):
         """
         Compute and return a checksum of the given payload data.
         """
+        if (len(data)%2 != 0):
+            data += "0"
         sum = 0
         for i in range(0, len(data), 2):
             data16 = ord(data[i]) + (ord(data[i+1]) << 8)
@@ -195,21 +199,25 @@ class Sender(object):
         """
         Wait for acknowledgement.
         """
-        if packets:
+        while True:
             ready = select.select([self.senderSocket], [], [], self.timeout)
             if ready[0]:
-                for packet in packets:
-                    received_data = self.senderSocket.recv(self.maxSegmentSize)
+                while packets:
+                    received_data = self.senderSocket.recv(6)
                     ack = self.parse(received_data)
-                    if packet.SequenceNumber == ack.AckNumber:
-                        packets.remove(packet)
-                        self.ack_timeout(fd)
+                    print ack
+                    for packet in packets:
+                        if packet.SequenceNumber == ack.AckNumber:
+                            packets.remove(packet)
+                    if len(packets) != 0:
+                        self.resend_packets(packets, fd)
+                    else:
+                        break
+                break
             else:
                 self.resend_packets(packets, fd)
-        else:
-            log.info("Acknowledgement receviced. Sending next part of data...")
 
-    def resend_packets(self, packets, fd):
+    def resend_packets(self, packet, fd):
         """
         Retransmit lost data.
         """
@@ -218,13 +226,25 @@ class Sender(object):
             raw_packet = self.make_pkt(packet)
             self.senderSocket.sendto(raw_packet, self.receiverSocket)
         log.info("Stopping retransmission of %s packets" % len(packets))
-        self.ack_timeout(fd)
+
+    def windows_num(self):
+        file_struct = os.stat(self.file_path)
+        windows_num = file_struct.st_size/(self.windowSize*self.maxSegmentSize)
+        print windows_num
+        return windows_num
+
 
 def main():
     #client = Sender(file_path='/home/renat/Labs/Python/ARQ/ARQ/data/sender/ViewOfMagdeburg.jpg')
-    client = Sender(file_path='/home/renat/Labs/Python/ARQ/ARQ/data/sender/linux-4.14.zip')
+    client = Sender(file_path='/home/max/ARQ/SR_ARQ/data/send/viber.deb')
     client.socket_open()
+    fd = client.file_open()
+    windows_num = client.windows_num()
+    for window in range(windows_num + 1):
+        client.send_packets(fd)
+        client.ack_timeout(fd)
     client.socket_close()
+
 
 if __name__ == '__main__':
     main()
