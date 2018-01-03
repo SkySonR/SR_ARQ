@@ -36,7 +36,7 @@ class Sender(object):
                  senderPort=55555,
                  receiverIP="127.0.0.1",
                  receiverPort=55554,
-                 windowSize=5,
+                 windowSize=94,
                  timeout=1,
                  maxSegmentSize=1480,
                  file_path=os.path.join(os.getcwd(), "data", "sender") + "index.html"):
@@ -188,7 +188,7 @@ class Sender(object):
         """
         header = receivedPacket[0:6]
         sequenceNumber = struct.unpack('=I', header[0:4])[0]
-        checksum = struct.unpack('=H', header[4:])[0]
+        checksum = struct.unpack('=H', header[4:6])[0]
         ACK = namedtuple("ACK", ["AckNumber", "Checksum"])
         packet = ACK(AckNumber=sequenceNumber,
                      Checksum=checksum)
@@ -200,21 +200,22 @@ class Sender(object):
         """
         while True:
             ready = select.select([self.senderSocket], [], [], self.timeout)
-            if ready[0]:
-                while packets:
-                    received_data = self.senderSocket.recv(6)
+            while ready[0]:
+                ready = select.select([self.senderSocket], [], [], 1)
+                if ready[0]:
+                    received_data = self.senderSocket.recv(24)
                     ack = self.parse(received_data)
                     print ack
                     for packet in packets:
                         if packet.SequenceNumber == ack.AckNumber:
                             packets.remove(packet)
-                    if len(packets) != 0:
-                        self.resend_packets(packets, fd)
-                    else:
-                        break
-                break
-            else:
+                else:
+                    print "break"
+                    break
+            if packets:
                 self.resend_packets(packets, fd)
+            else:
+                break
 
     def resend_packets(self, packet, fd):
         """
@@ -238,8 +239,10 @@ def main():
     client = Sender(file_path='/home/max/ARQ/SR_ARQ/data/send/viber.deb')
     client.socket_open()
     fd = client.file_open()
+    #client.send_packets(fd)
+    #client.ack_timeout(fd)
     windows_num = client.windows_num()
-    for window in range(windows_num + 1):
+    for window in range(1, windows_num + 1):
         client.send_packets(fd)
         client.ack_timeout(fd)
     client.socket_close()

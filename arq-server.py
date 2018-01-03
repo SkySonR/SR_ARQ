@@ -32,7 +32,7 @@ class Receiver(object):
                  receiverPort=55554,
                  senderIP="0.0.0.0",
                  senderPort=55555,
-                 windowSize=5,
+                 windowSize=94,
                  timeout=1,
                  bufferSize=1500,
                  file_path=os.path.join(os.getcwd(), "data", "receiver") + "index.html"):
@@ -90,13 +90,7 @@ class Receiver(object):
             pass
 
     def file_write(self, packet):
-        if packet.SequenceNumber not in self.received_packets:
-            fd.write(packet.Data)
-            self.received_packets.append(packet.SequenceNumber)
-        elif len(self.received_packets) == self.windowSize:
-            self.received_packets = []
-            self.received_packets.append(packet.SequenceNumber)
-            fd.write(packet.Data)
+        fd.write(packet.Data)
 
     def run(self):
         """
@@ -141,8 +135,7 @@ class Receiver(object):
         data = receivedPacket[6:]
 
         sequenceNumber = struct.unpack('=I', header[0:4])[0]
-        print(sequenceNumber)
-        checksum = struct.unpack('=H', header[4:])[0]
+        checksum = struct.unpack('=H', header[4:6])[0]
         PACKET = namedtuple("Packet", ["SequenceNumber", "Checksum", "Data"])
         packet = PACKET(SequenceNumber=sequenceNumber,
                                       Checksum=checksum,
