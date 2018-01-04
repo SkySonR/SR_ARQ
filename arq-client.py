@@ -139,7 +139,7 @@ class Sender(object):
         Compute and return a checksum of the given payload data.
         """
         if (len(data)%2 != 0):
-            data += "0"
+            data += "1"
 
         sum = 0
         for i in range(0, len(data), 2):

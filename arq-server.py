@@ -101,6 +101,9 @@ class Receiver(object):
             if packet.Checksum not in self.received_checksum and packet.Checksum not in self.last_window_checksum:
                 self.received_packets.append(packet)
                 self.reveived_packets = sorted(self.received_packets, key=attrgetter('SequenceNumber'))
+            elif packet.Checksum == 65535:
+                self.received_packets.append(packet)
+                self.reveived_packets = sorted(self.received_packets, key=attrgetter('SequenceNumber'))
             if len(self.received_packets) == self.windowSize and packet.Checksum not in self.received_checksum and packet.Checksum not in self.last_window_checksum:
                 for i in self.received_packets:
                         fd.write(i.Data)
@@ -108,6 +111,8 @@ class Receiver(object):
                         self.last_window_checksum.append(i.Checksum)
                 self.received_packets = []
                 print "CLEAN UP"
+                if len(self.last_window_checksum) > self.windowSize:
+                    self.last_window_checksum = self.last_window_checksum[self.windowSize:]
                 print "last wind %s" % self.last_window_checksum
                 self.received_checksum = []
             else:
@@ -165,6 +170,10 @@ class Receiver(object):
                          receivedPacket.SequenceNumber)
                 log.info("Transmitting an acknowledgement with ack number: %d",
                          receivedPacket.SequenceNumber)
+                log.info("Receive packet with checksum: %d",
+                         receivedPacket.Checksum)
+                if receivedPacket.Checksum == 65535:
+                    print receivedPacket
                 self.generate_ack(receivedPacket.SequenceNumber)
                 self.file_write(receivedPacket)
                 print self.received_checksum
@@ -200,7 +209,7 @@ class Receiver(object):
         Compute and return a checksum of the given payload data.
         """
         if (len(data)%2 != 0):
-            data += "0"
+            data += "1"
         sum = 0
         for i in range(0, len(data), 2):
             data16 = ord(data[i]) + (ord(data[i+1]) << 8)
