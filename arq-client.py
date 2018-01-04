@@ -236,18 +236,20 @@ class Sender(object):
 
 def main():
     #client = Sender(file_path='/home/renat/Labs/Python/ARQ/ARQ/data/sender/ViewOfMagdeburg.jpg')
-    client = Sender(file_path='/home/max/ARQ/SR_ARQ/data/send/viber.deb')
+    client = Sender(file_path='/home/max/ARQ/SR_ARQ/data/send/2')
     client.socket_open()
     fd = client.file_open()
     #client.send_packets(fd)
     #client.ack_timeout(fd)
     windows_num = client.windows_num()
-    client.send_packets(fd)
-    client.ack_timeout(fd)
-#    for window in range(1, windows_num + 2):
-#        client.send_packets(fd)
-#        client.ack_timeout(fd)
-#    client.socket_close()
+    #client.send_packets(fd)
+    #client.ack_timeout(fd)
+    #client.send_packets(fd)
+    #client.ack_timeout(fd)
+    for window in range(1, windows_num + 2):
+        client.send_packets(fd)
+        client.ack_timeout(fd)
+    client.socket_close()
 
 
 if __name__ == '__main__':

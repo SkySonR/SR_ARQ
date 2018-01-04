@@ -35,8 +35,9 @@ class Receiver(object):
                  senderIP="0.0.0.0",
                  senderPort=55555,
                  windowSize=10,
-                 received_seq = [],
-                 timeout=1,
+                 received_checksum = [],
+                 last_window_checksum = [],
+                 timeout=5,
                  bufferSize=1500,
                  file_path=os.path.join(os.getcwd(), "data", "receiver") + "index.html"):
         self.receiverIP = receiverIP
@@ -49,7 +50,9 @@ class Receiver(object):
         self.senderSocket = (self.senderIP, self.senderPort)
         self.bufferSize = bufferSize
         self.received_packets = received_packets
-        self.received_seq = received_seq
+        self.received_checksum = received_checksum
+        self.last_window_checksum = last_window_checksum
+        self.timeout = timeout
 
     def socket_open(self):
         """
@@ -95,21 +98,39 @@ class Receiver(object):
 
     def file_write(self, packet):
         if self.received_packets:
-            for i in self.received_packets:
-                if i.SequenceNumber not in self.received_seq:
-                    self.received_seq.append(i.SequenceNumber)
-            if packet.SequenceNumber not in self.received_seq:
+            if packet.Checksum not in self.received_checksum and packet.Checksum not in self.last_window_checksum:
                 self.received_packets.append(packet)
                 self.reveived_packets = sorted(self.received_packets, key=attrgetter('SequenceNumber'))
-            elif len(self.received_packets) == self.windowSize :#and packet.SequenceNumber not in self.received_seq:
+            if len(self.received_packets) == self.windowSize and packet.Checksum not in self.received_checksum and packet.Checksum not in self.last_window_checksum:
                 for i in self.received_packets:
                         fd.write(i.Data)
+                        print "fgfgfgf %s" % i.Checksum
+                        self.last_window_checksum.append(i.Checksum)
                 self.received_packets = []
                 print "CLEAN UP"
-                self.received_seq = []
-                self.received_packets.append(packet)
-        else:
+                print "last wind %s" % self.last_window_checksum
+                self.received_checksum = []
+            else:
+                ready = select.select([self.receiverSocket], [], [], self.timeout)
+                if ready[0]:
+                    pass
+                    print "pass"
+                else:
+                    print "ELSEBLIAT6"
+                    for i in self.received_packets:
+                            fd.write(i.Data)
+                            print "fgfgfgf %s" % i.Checksum
+                            self.last_window_checksum.append(i.Checksum)
+                    self.received_packets = []
+                    print "CLEAN UP"
+                    print "last wind %s" % self.last_window_checksum
+                    self.received_checksum = []
+            for i in self.received_packets:
+                if i.Checksum not in self.received_checksum:
+                    self.received_checksum.append(i.Checksum)
+        elif packet.Checksum not in self.last_window_checksum:
             self.received_packets.append(packet)
+            self.received_checksum.append(packet.Checksum)
             print "FIRST ELSE"
 
 
@@ -146,7 +167,7 @@ class Receiver(object):
                          receivedPacket.SequenceNumber)
                 self.generate_ack(receivedPacket.SequenceNumber)
                 self.file_write(receivedPacket)
-                print self.received_seq
+                print self.received_checksum
 
 
     def parse(self, receivedPacket):
