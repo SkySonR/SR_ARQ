@@ -22,7 +22,7 @@ args = parser.parse_args()
 logging.basicConfig(level=logging.DEBUG,
                     format='%(asctime)s RECEIVER [%(levelname)s] %(message)s',)
 log = logging.getLogger()
-
+log.disabled = True
 class Receiver(object):
     """
     Receiver running Selective Repeat protocol for reliable data transfer.
@@ -30,13 +30,14 @@ class Receiver(object):
     last_window_seq = []
     received_seq = []
     received_packets =[]
+    checksum = False
     def __init__(self,
                  receiverIP="127.0.0.1",
                  receiverPort=55554,
                  senderIP="0.0.0.0",
                  senderPort=55555,
                  windowSize=93,
-                 timeout=1,
+                 timeout=1.1,
                  bufferSize=1500,
                  file_path=os.path.join(os.getcwd(), "data", "receiver") + "index.html"):
         self.receiverIP = receiverIP
@@ -98,8 +99,8 @@ class Receiver(object):
             self.received_seq.append(packet.SequenceNumber)
         else:
             log.info("Received dublicate of previous packet")
-            #return 0
         if len(self.received_packets) == self.windowSize:
+            self.received_packets = sorted(self.received_packets, key=attrgetter('SequenceNumber'))
             for i in self.received_packets:
                 fd.write(i.Data)
             self.received_packets = []
@@ -107,6 +108,7 @@ class Receiver(object):
         if ready[0]:
             pass
         else:
+            self.received_packets = sorted(self.received_packets, key=attrgetter('SequenceNumber'))
             for i in self.received_packets:
                 fd.write(i.Data)
             self.received_packets = []
@@ -130,25 +132,20 @@ class Receiver(object):
             # Parse header fields and payload data from the received packet
             receivedPacket = self.parse(receivedPacket)
             # Check whether the received packet is not corrupt
-            if self.corrupt(receivedPacket):
-                log.warning("Received corrupt packet!!")
-                log.warning("Discarding packet with sequence number: %d",
+            if self.checksum:
+                if self.corrupt(receivedPacket):
+                    log.warning("Received corrupt packet!!")
+                    log.warning("Discarding packet with sequence number: %d",
                             receivedPacket.SequenceNumber)
-                continue
+                    continue
             # Otherwise, store received packet into receipt window and
             # send corresponding acknowledgement
-            else:
-                log.info("Received packet with sequence number: %d",
+            log.info("Received packet with sequence number: %d",
                          receivedPacket.SequenceNumber)
-                log.info("Transmitting an acknowledgement with ack number: %d",
+            log.info("Transmitting an acknowledgement with ack number: %d",
                          receivedPacket.SequenceNumber)
-                log.info("Receive packet with checksum: %d",
-                         receivedPacket.SequenceNumber)
-                if receivedPacket.SequenceNumber == 65535:
-                    print receivedPacket
-                self.generate_ack(receivedPacket.SequenceNumber)
-                self.file_write(receivedPacket)
-            print self.received_seq
+            self.generate_ack(receivedPacket.SequenceNumber)
+            self.file_write(receivedPacket)
 
     def parse(self, receivedPacket):
         """
@@ -158,10 +155,15 @@ class Receiver(object):
         data = receivedPacket[6:]
 
         sequenceNumber = struct.unpack('=I', header[0:4])[0]
-        checksum = struct.unpack('=H', header[4:6])[0]
-        PACKET = namedtuple("Packet", ["SequenceNumber", "Checksum", "Data"])
-        packet = PACKET(SequenceNumber=sequenceNumber,
+        if self.checksum:
+            checksum = struct.unpack('=H', header[4:6])[0]
+            PACKET = namedtuple("Packet", ["SequenceNumber", "Checksum", "Data"])
+            packet = PACKET(SequenceNumber=sequenceNumber,
                                       Checksum=checksum,
+                                      Data=data)
+        else:
+            PACKET = namedtuple("Packet", ["SequenceNumber", "Data"])
+            packet = PACKET(SequenceNumber=sequenceNumber,
                                       Data=data)
         return packet
 
@@ -198,10 +200,13 @@ class Receiver(object):
         """
         Reliable acknowledgement transfer.
         """
-        ACK = namedtuple("ACK", ["AckNumber", "Checksum"])
-        ack = ACK(AckNumber=ackNumber,
+        if self.checksum:
+            ACK = namedtuple("ACK", ["AckNumber", "Checksum"])
+            ack = ACK(AckNumber=ackNumber,
                   Checksum=self.get_hashcode(ackNumber))
-
+        else:
+            ACK = namedtuple("ACK", ["AckNumber"])
+            ack = ACK(AckNumber=ackNumber)
         # Create a raw acknowledgement
         rawAck = self.make_pkt(ack)
         # Transmit an acknowledgement using underlying UDP protocol
@@ -220,8 +225,11 @@ class Receiver(object):
         Create a raw acknowledgement.
         """
         ackNumber = struct.pack('=I', ack.AckNumber)
-        checksum = struct.pack('=16s', ack.Checksum)
-        rawAck = ackNumber + checksum
+        if self.checksum:
+            checksum = struct.pack('=16s', ack.Checksum)
+            rawAck = ackNumber + checksum
+        else:
+            rawAck = ackNumber
         return rawAck
 
     def corrupt(self, receivedPacket):
@@ -251,7 +259,6 @@ class Receiver(object):
 
 def main():
     server = Receiver(file_path='/home/renat/Labs/Python/ARQ/ARQ/data/receiver/ViewOfMagdeburg.jpg')
-    #server = Receiver(file_path='/home/max/ARQ/SR_ARQ/data/rec/1')
     try:
         server.socket_open()
         server.socket_close()

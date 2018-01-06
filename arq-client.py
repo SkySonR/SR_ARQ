@@ -16,23 +16,21 @@ import os
 import struct
 import select
 import logging
-from collections import namedtuple
-
 import traceback
-
-sys.setrecursionlimit(100000)
+from collections import namedtuple
 
 # Set logging
 logging.basicConfig(level=logging.DEBUG,
                     format='%(asctime)s SENDER [%(levelname)s] %(message)s',)
 log = logging.getLogger()
+log.disabled = True
 
 class Sender(object):
     """
     Sender running Selective Repeat protocol for reliable data transfer.
     """
     sequenceNumber = 1
-
+    checksum = False
     def __init__(self,
                  senderIP="127.0.0.1",
                  senderPort=55555,
@@ -40,7 +38,7 @@ class Sender(object):
                  receiverPort=55554,
                  windowSize=93,
                  timeout=0.03,
-                 maxSegmentSize=1480,
+                 maxSegmentSize=1494,
                  file_path=os.path.join(os.getcwd(), "data", "sender") + "index.html"):
         self.senderIP = senderIP
         self.senderPort = senderPort
@@ -125,9 +123,14 @@ class Sender(object):
                 break
             # Set sequence number for a packet to be transmitted
             # Create a packet with required header fields and payload
-            PACKET = namedtuple("Packet", ["SequenceNumber", "Checksum", "Data"])
-            pkt = PACKET(SequenceNumber=self.sequenceNumber,
+            if self.checksum:
+                PACKET = namedtuple("Packet", ["SequenceNumber", "Checksum", "Data"])
+                pkt = PACKET(SequenceNumber=self.sequenceNumber,
                          Checksum=self.checksum(data),
+                         Data=data)
+            else:
+                PACKET = namedtuple("Packet", ["SequenceNumber", "Data"])
+                pkt = PACKET(SequenceNumber=self.sequenceNumber,
                          Data=data)
             packets.append(pkt)
             self.sequenceNumber += 1
@@ -175,8 +178,11 @@ class Sender(object):
         Create a raw packet.
         """
         sequenceNumber = struct.pack('=I', packet.SequenceNumber)
-        checksum = struct.pack('=H', packet.Checksum)
-        rawPacket = sequenceNumber + checksum + packet.Data
+        if self.checksum:
+            checksum = struct.pack('=H', packet.Checksum)
+            rawPacket = sequenceNumber + checksum + packet.Data
+        else:
+            rawPacket = sequenceNumber + packet.Data
         return rawPacket
 
     def parse(self, receivedPacket):
@@ -185,10 +191,14 @@ class Sender(object):
         """
         header = receivedPacket[0:6]
         sequenceNumber = struct.unpack('=I', header[0:4])[0]
-        checksum = struct.unpack('=H', header[4:6])[0]
-        ACK = namedtuple("ACK", ["AckNumber", "Checksum"])
-        packet = ACK(AckNumber=sequenceNumber,
+        if self.checksum:
+            checksum = struct.unpack('=H', header[4:6])[0]
+            ACK = namedtuple("ACK", ["AckNumber", "Checksum"])
+            packet = ACK(AckNumber=sequenceNumber,
                      Checksum=checksum)
+        else:
+            ACK = namedtuple("ACK", ["AckNumber"])
+            packet = ACK(AckNumber=sequenceNumber)
         return packet
 
     def ack_timeout(self, fd):
@@ -200,11 +210,10 @@ class Sender(object):
             while ready[0]:
                 received_data = self.senderSocket.recv(6)
                 ack = self.parse(received_data)
-                print ack
                 for packet in packets:
                     if packet.SequenceNumber == ack.AckNumber:
                         packets.remove(packet)
-                ready = select.select([self.senderSocket], [], [], 0.01)
+                ready = select.select([self.senderSocket], [], [], 0.001)
             if packets:
                 self.resend_packets(packets, fd)
             else:
@@ -223,23 +232,14 @@ class Sender(object):
     def windows_num(self):
         file_struct = os.stat(self.file_path)
         windows_num = file_struct.st_size/(self.windowSize*self.maxSegmentSize)
-        packets_num = file_struct.st_size/self.maxSegmentSize
-        print packets_num
         return windows_num
 
 
 def main():
     client = Sender(file_path='/home/renat/Labs/Python/ARQ/ARQ/data/sender/ViewOfMagdeburg.jpg')
-    #client = Sender(file_path='/home/max/ARQ/SR_ARQ/data/send/2')
     client.socket_open()
     fd = client.file_open()
-    #client.send_packets(fd)
-    #client.ack_timeout(fd)
     windows_num = client.windows_num()
-    #client.send_packets(fd)
-    #client.ack_timeout(fd)
-    #client.send_packets(fd)
-    #client.ack_timeout(fd)
     for window in range(1, windows_num + 2):
         client.send_packets(fd)
         client.ack_timeout(fd)
