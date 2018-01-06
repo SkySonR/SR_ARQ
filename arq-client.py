@@ -31,13 +31,15 @@ class Sender(object):
     """
     Sender running Selective Repeat protocol for reliable data transfer.
     """
+    sequenceNumber = 1
+
     def __init__(self,
                  senderIP="127.0.0.1",
                  senderPort=55555,
                  receiverIP="127.0.0.1",
                  receiverPort=55554,
-                 windowSize=10,
-                 timeout=1,
+                 windowSize=93,
+                 timeout=0.03,
                  maxSegmentSize=1480,
                  file_path=os.path.join(os.getcwd(), "data", "sender") + "index.html"):
         self.senderIP = senderIP
@@ -110,28 +112,25 @@ class Sender(object):
         Generate packets for transmitting to receiver.
         """
         packets = []
-        i = 1
-        sequenceNumber = 1
         log.info("Generating packets for transmitting to receiver")
         while True:
             # Read data such that
             # size of data chunk should not exceed maximum payload size
             # If not data, finish reading
-            if sequenceNumber % self.windowSize == 0:
+            if len(packets) == self.windowSize:
                 break
             data = fd.read(self.maxSegmentSize)
             # If not data, finish reading
             if not data:
                 break
             # Set sequence number for a packet to be transmitted
-            sequenceNumber = i
             # Create a packet with required header fields and payload
             PACKET = namedtuple("Packet", ["SequenceNumber", "Checksum", "Data"])
-            pkt = PACKET(SequenceNumber=sequenceNumber,
+            pkt = PACKET(SequenceNumber=self.sequenceNumber,
                          Checksum=self.checksum(data),
                          Data=data)
             packets.append(pkt)
-            i += 1
+            self.sequenceNumber += 1
         return packets
 
     def checksum(self, data):
@@ -170,8 +169,6 @@ class Sender(object):
                 raw_packet = self.make_pkt(packet)
                 self.senderSocket.sendto(raw_packet, self.receiverSocket)
             log.info("Stopping transmission of %s packets" % self.windowSize)
-        else:
-            self.socket_close()
 
     def make_pkt(self, packet):
         """
@@ -201,17 +198,13 @@ class Sender(object):
         while True:
             ready = select.select([self.senderSocket], [], [], self.timeout)
             while ready[0]:
-                ready = select.select([self.senderSocket], [], [], 1)
-                if ready[0]:
-                    received_data = self.senderSocket.recv(24)
-                    ack = self.parse(received_data)
-                    print ack
-                    for packet in packets:
-                        if packet.SequenceNumber == ack.AckNumber:
-                            packets.remove(packet)
-                else:
-                    print "break"
-                    break
+                received_data = self.senderSocket.recv(6)
+                ack = self.parse(received_data)
+                print ack
+                for packet in packets:
+                    if packet.SequenceNumber == ack.AckNumber:
+                        packets.remove(packet)
+                ready = select.select([self.senderSocket], [], [], 0.01)
             if packets:
                 self.resend_packets(packets, fd)
             else:
@@ -230,13 +223,14 @@ class Sender(object):
     def windows_num(self):
         file_struct = os.stat(self.file_path)
         windows_num = file_struct.st_size/(self.windowSize*self.maxSegmentSize)
-        print windows_num
+        packets_num = file_struct.st_size/self.maxSegmentSize
+        print packets_num
         return windows_num
 
 
 def main():
-    #client = Sender(file_path='/home/renat/Labs/Python/ARQ/ARQ/data/sender/ViewOfMagdeburg.jpg')
-    client = Sender(file_path='/home/max/ARQ/SR_ARQ/data/send/2')
+    client = Sender(file_path='/home/renat/Labs/Python/ARQ/ARQ/data/sender/ViewOfMagdeburg.jpg')
+    #client = Sender(file_path='/home/max/ARQ/SR_ARQ/data/send/2')
     client.socket_open()
     fd = client.file_open()
     #client.send_packets(fd)

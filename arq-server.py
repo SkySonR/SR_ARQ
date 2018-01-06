@@ -27,17 +27,16 @@ class Receiver(object):
     """
     Receiver running Selective Repeat protocol for reliable data transfer.
     """
-
+    last_window_seq = []
+    received_seq = []
+    received_packets =[]
     def __init__(self,
-                 received_packets =[],
                  receiverIP="127.0.0.1",
                  receiverPort=55554,
                  senderIP="0.0.0.0",
                  senderPort=55555,
-                 windowSize=10,
-                 received_checksum = [],
-                 last_window_checksum = [],
-                 timeout=5,
+                 windowSize=93,
+                 timeout=1,
                  bufferSize=1500,
                  file_path=os.path.join(os.getcwd(), "data", "receiver") + "index.html"):
         self.receiverIP = receiverIP
@@ -49,9 +48,6 @@ class Receiver(object):
         self.senderPort = senderPort
         self.senderSocket = (self.senderIP, self.senderPort)
         self.bufferSize = bufferSize
-        self.received_packets = received_packets
-        self.received_checksum = received_checksum
-        self.last_window_checksum = last_window_checksum
         self.timeout = timeout
 
     def socket_open(self):
@@ -97,47 +93,23 @@ class Receiver(object):
             pass
 
     def file_write(self, packet):
-        if self.received_packets:
-            if packet.Checksum not in self.received_checksum and packet.Checksum not in self.last_window_checksum:
-                self.received_packets.append(packet)
-                self.reveived_packets = sorted(self.received_packets, key=attrgetter('SequenceNumber'))
-            elif packet.Checksum == 65535:
-                self.received_packets.append(packet)
-                self.reveived_packets = sorted(self.received_packets, key=attrgetter('SequenceNumber'))
-            if len(self.received_packets) == self.windowSize and packet.Checksum not in self.received_checksum and packet.Checksum not in self.last_window_checksum:
-                for i in self.received_packets:
-                        fd.write(i.Data)
-                        print "fgfgfgf %s" % i.Checksum
-                        self.last_window_checksum.append(i.Checksum)
-                self.received_packets = []
-                print "CLEAN UP"
-                if len(self.last_window_checksum) > self.windowSize:
-                    self.last_window_checksum = self.last_window_checksum[self.windowSize:]
-                print "last wind %s" % self.last_window_checksum
-                self.received_checksum = []
-            else:
-                ready = select.select([self.receiverSocket], [], [], self.timeout)
-                if ready[0]:
-                    pass
-                    print "pass"
-                else:
-                    print "ELSEBLIAT6"
-                    for i in self.received_packets:
-                            fd.write(i.Data)
-                            print "fgfgfgf %s" % i.Checksum
-                            self.last_window_checksum.append(i.Checksum)
-                    self.received_packets = []
-                    print "CLEAN UP"
-                    print "last wind %s" % self.last_window_checksum
-                    self.received_checksum = []
-            for i in self.received_packets:
-                if i.Checksum not in self.received_checksum:
-                    self.received_checksum.append(i.Checksum)
-        elif packet.Checksum not in self.last_window_checksum:
+        if packet.SequenceNumber not in self.received_seq:
             self.received_packets.append(packet)
-            self.received_checksum.append(packet.Checksum)
-            print "FIRST ELSE"
-
+            self.received_seq.append(packet.SequenceNumber)
+        else:
+            log.info("Received dublicate of previous packet")
+            #return 0
+        if len(self.received_packets) == self.windowSize:
+            for i in self.received_packets:
+                fd.write(i.Data)
+            self.received_packets = []
+        ready = select.select([self.receiverSocket], [], [], self.timeout)
+        if ready[0]:
+            pass
+        else:
+            for i in self.received_packets:
+                fd.write(i.Data)
+            self.received_packets = []
 
     def run(self):
         """
@@ -171,13 +143,12 @@ class Receiver(object):
                 log.info("Transmitting an acknowledgement with ack number: %d",
                          receivedPacket.SequenceNumber)
                 log.info("Receive packet with checksum: %d",
-                         receivedPacket.Checksum)
-                if receivedPacket.Checksum == 65535:
+                         receivedPacket.SequenceNumber)
+                if receivedPacket.SequenceNumber == 65535:
                     print receivedPacket
                 self.generate_ack(receivedPacket.SequenceNumber)
                 self.file_write(receivedPacket)
-                print self.received_checksum
-
+            print self.received_seq
 
     def parse(self, receivedPacket):
         """
@@ -279,10 +250,11 @@ class Receiver(object):
         self.file_close()
 
 def main():
-    #server = Receiver(file_path='/home/renat/Labs/Python/ARQ/ARQ/data/receiver/ViewOfMagdeburg.jpg')
-    server = Receiver(file_path='/home/max/ARQ/SR_ARQ/data/rec/1')
+    server = Receiver(file_path='/home/renat/Labs/Python/ARQ/ARQ/data/receiver/ViewOfMagdeburg.jpg')
+    #server = Receiver(file_path='/home/max/ARQ/SR_ARQ/data/rec/1')
     try:
         server.socket_open()
+        server.socket_close()
     except:
         server.socket_close()
 
