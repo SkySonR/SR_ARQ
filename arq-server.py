@@ -104,6 +104,8 @@ class Receiver(object):
             for i in self.received_packets:
                 fd.write(i.Data)
             self.received_packets = []
+        if len(self.received_seq) == 10 * self.windowSize:
+            self.received_seq = self.received_seq[self.windowSize:]
         ready = select.select([self.receiverSocket], [], [], self.timeout)
         if ready[0]:
             pass

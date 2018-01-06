@@ -134,6 +134,8 @@ class Sender(object):
                          Data=data)
             packets.append(pkt)
             self.sequenceNumber += 1
+            if self.sequenceNumber == 10 * self.windowSize:
+                self.sequenceNumber = 1
         return packets
 
     def checksum(self, data):
